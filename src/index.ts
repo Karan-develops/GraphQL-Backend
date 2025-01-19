@@ -1,6 +1,7 @@
 import express from "express";
 import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@apollo/server/express4";
+import { prismaClient } from "./db/db";
 
 async function init() {
   const app = express();
@@ -11,8 +12,11 @@ async function init() {
   const graphQServer = new ApolloServer({
     typeDefs: `
         type Query{
-            hello:String
-            helloName(name:String):String
+          hello:String
+          helloName(name:String):String
+        }
+        type Mutation{
+          createUser(firstName:String!, lastName:String!, email:String!, password:String!)
         }
     `,
     resolvers: {
@@ -22,6 +26,34 @@ async function init() {
         },
         helloName: (_, { name }: { name: String }) => {
           return `Hello, ${name}, How are doing.`;
+        },
+      },
+      Mutation: {
+        createUser: async (
+          _,
+          {
+            firstName,
+            lastName,
+            email,
+            password,
+          }: {
+            firstName: string;
+            lastName: string;
+            email: string;
+            password: string;
+          }
+        ) => {
+          await prismaClient.user.create({
+            data: {
+              email,
+              password,
+              firstName,
+              lastName,
+              salt: "rand_salt",
+              profileImgUrl: "default_profile_img_url",
+            },
+          });
+          return true;
         },
       },
     },
