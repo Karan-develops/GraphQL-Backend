@@ -1,75 +1,36 @@
 import express from "express";
-import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@apollo/server/express4";
-import { prismaClient } from "./db/db";
+import createApolloGraphqlServer from "./graphql";
+import UserService from "./services/user";
 
 async function init() {
   const app = express();
-  const PORT = 8000;
+  const PORT = Number(process.env.PORT) || 8000;
 
   app.use(express.json());
 
-  const graphQServer = new ApolloServer({
-    typeDefs: `
-        type Query{
-          hello:String
-          helloName(name:String):String
-        }
-        type Mutation{
-          createUser(firstName:String!, lastName:String!, email:String!, password:String!)
-        }
-    `,
-    resolvers: {
-      Query: {
-        hello: () => {
-          return "Hello There!";
-        },
-        helloName: (_, { name }: { name: String }) => {
-          return `Hello, ${name}, How are doing.`;
-        },
-      },
-      Mutation: {
-        createUser: async (
-          _,
-          {
-            firstName,
-            lastName,
-            email,
-            password,
-          }: {
-            firstName: string;
-            lastName: string;
-            email: string;
-            password: string;
-          }
-        ) => {
-          await prismaClient.user.create({
-            data: {
-              email,
-              password,
-              firstName,
-              lastName,
-              salt: "rand_salt",
-              profileImgUrl: "default_profile_img_url",
-            },
-          });
-          return true;
-        },
-      },
-    },
-  });
-
-  await graphQServer.start();
-
   app.get("/", (req, res) => {
-    res.json({ message: "Everything is good!" });
+    res.json({ message: "Server is up and running" });
   });
 
-  app.use("/graphql", expressMiddleware(graphQServer));
+  app.use(
+    "/graphql",
+    expressMiddleware(await createApolloGraphqlServer(), {
+      context: async ({ req }) => {
+        // @ts-ignore
+        const token = req.headers["token"];
 
-  app.listen(PORT, () => {
-    console.log(`Server is running at port:${PORT}`);
-  });
+        try {
+          const user = UserService.decodeJWTToken(token as string);
+          return { user };
+        } catch (error) {
+          return {};
+        }
+      },
+    })
+  );
+
+  app.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
 }
 
 init();
